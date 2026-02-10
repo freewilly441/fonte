@@ -1,0 +1,124 @@
+ Executive Summary
+  A practical offline knowledge appliance can be built today on low-end hardware by combining a local corpus store (Wikipedia subset, dictionaries, public-domain books), a fast
+  usable without any AI features. The MVP can be delivered with CPU-only inference, a compact embedding model, and a lightweight UI that runs on a local web server.
+  Architecture Overview
+
+  1. Data Sources → 2. Ingestion & Normalization → 3. Local Storage
+  2. Indexing (Lexical + Vector) → 5. Retrieval
+  3. Answering (LLM, strictly grounded)
+  5. UI Layer
+
+
+  - AI components: embeddings + LLM inference + RAG orchestration
+  - Deterministic utilities: calculators, unit conversions, time/date
+  - Data management: corpus, metadata, user documents, rebuilds
+  Component-by-Component Design
+  1. Data Storage
+  - Format: Plain text + structured metadata.
+  - Article storage: chunked text files or SQLite with separate tables for documents, chunks, sources.
+  - Dictionaries: JSON/SQLite for fast lookup; include pronunciation text if available.
+  - Books: plain text or EPUB-to-text extraction; store as chunked sections.
+  - User add/delete: file-based import; metadata entry in SQLite; deletion removes row + index entries.
+  Justification: SQLite is ubiquitous, inspectable, and robust on weak machines. Text files remain human-readable.
+  2. Indexing
+
+  - Lexical index: tantivy (Rust) or sqlite FTS5.
+  - Chunking: 300–600 tokens per chunk, with 10–15% overlap.
+
+  Tradeoff: Hybrid retrieval (lexical + vector) reduces hallucination and improves recall without large models.
+
+  3. Retrieval
+
+  - Query → lexical + vector search → merge + rerank.
+  - Rerank: simple score fusion (BM25 + cosine).
+  - Retrieve top 5–8 chunks maximum.
+
+
+  - Model: 3B–7B open-source quantized (GGUF) running on CPU via llama.cpp.
+  - Decoding: temperature 0.0, top-p 1.0, top-k 1 for deterministic output.
+  - System prompt: must answer only from provided context; cite chunk IDs; refuse otherwise.
+  - Refusal rule: if no chunk score passes threshold, return “I don’t know.”
+
+
+  - Standard + scientific calculators: deterministic, built-in.
+  - Unit conversion: static tables in JSON (length, mass, temperature, currency fixed to a snapshot date).
+  - Date/time: conversions, day-of-week, date arithmetic, time zones (static tzdata).
+  - Reference tables: physical constants, common formulas.
+  All utilities run without ML and work on minimal hardware.
+
+  6. UI Layer
+
+  - Local web app served on localhost (or LAN if desired).
+  - Search box with filters by dataset, language, and type.
+  - Utilities tab for calculators and conversions.
+
+
+  - Rebuild index button.
+
+
+  - Storage: SQLite + filesystem (text files).
+  - Embeddings: sentence-transformers or fastembed.
+  - LLM: llama.cpp with a quantized 3B–7B model (GGUF).
+
+
+
+  - Importer for user documents.
+  - Hybrid search (lexical + vector).
+  - Strictly grounded Q&A with citations and refusal.
+  - Calculators + unit conversion + date/time utilities.
+  - Local web UI.
+
+  Deferred:
+
+  - Full multilingual encyclopedia.
+  - Advanced reranking models.
+  - GPU optimization.
+
+  Swappable later:
+
+  - Embedding model.
+  - Vector index engine.
+  - LLM backend.
+  - UI framework.
+
+  Risk Analysis & Mitigations
+
+  1. Hallucination risk
+
+  - Mitigation: strict prompting, retrieval thresholding, cite-only answers, refusal on low confidence.
+
+  2. Performance bottlenecks
+
+  - Mitigation: small embeddings, compact index, caching, limit top-k, quantized LLM.
+
+  3. Storage bloat
+
+  - Mitigation: modular datasets, storage dashboard, dataset toggles, chunking limits.
+
+  4. UX pitfalls on weak hardware
+
+  - Mitigation: instant lexical search, incremental loading, avoid heavy JS, local assets only.
+
+  5. Language coverage gaps
+
+  - Mitigation: clear dataset labeling and “not in corpus” responses.
+
+  MVP Checklist
+
+  1. Corpus loader + metadata registry
+  2. Chunker + index builder
+  3. Lexical + vector retrieval
+  4. Deterministic Q&A pipeline with citations
+  5. Refusal logic for missing info
+  6. Calculators + conversions + date/time tools
+  7. Local web UI with search, Q&A, utilities, corpus management
+  8. Storage usage reporting
+  9. Offline documentation and reproducible build steps
+
+  Open Technical Questions
+
+  1. Which corpus subset sizes fit best in 4–8GB RAM with acceptable latency?
+  2. Do we prefer SQLite FTS5 or Tantivy for simplicity and speed?
+  3. Which embedding model offers the best accuracy/size tradeoff on CPU?
+  4. What refusal threshold is safe without excessive false negatives?
+  5. Should we standardize data import as plain text only for v1?

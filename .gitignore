@@ -1,0 +1,42 @@
+# Runtime data
+/data/
+/user_docs/
+/models/
+/data/models/
+
+# Logs
+*.log
+logs/
+fonte_codex_development_log.txt
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+venv/
+.env
+
+# Build artifacts
+build/
+dist/
+*.spec
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor config
+.vscode/
+.idea/
+
+# Local databases and vector indices
+*.sqlite
+*.db
+*.bin
+*.npz
+vector_index.bin
+vector_meta.npz
+*.gguf

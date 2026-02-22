@@ -1,0 +1,5 @@
+numpy
+sv-ttk
+darkdetect
+llama-cpp-python
+openai

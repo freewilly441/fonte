@@ -1,8 +1,26 @@
 from pathlib import Path
 from typing import List, Tuple
 
+STOP_SEQUENCES = [
+    "\nQ:",
+    "\nQuestion:",
+    "\nUser:",
+    "\nAssistant:",
+]
 
-def load_llm(model_path: Path):
+
+def load_llm(
+    *,
+    backend: str = "llama_cpp",
+    model_path: Path | None = None,
+    n_ctx: int = 1536,
+    n_threads: int = 4,
+    n_batch: int = 128,
+):
+    if backend != "llama_cpp":
+        raise RuntimeError("Only embedded local llama.cpp inference is supported.")
+    if model_path is None:
+        raise FileNotFoundError("Model path is required for llama_cpp backend")
     try:
         from llama_cpp import Llama
     except Exception as exc:  # pragma: no cover - runtime dependency
@@ -11,13 +29,14 @@ def load_llm(model_path: Path):
     if not model_path.exists():
         raise FileNotFoundError(f"Model not found: {model_path}")
 
-    return Llama(
+    model = Llama(
         model_path=str(model_path),
-        n_ctx=2048,
-        n_threads=4,
-        n_batch=256,
+        n_ctx=max(512, int(n_ctx)),
+        n_threads=max(1, int(n_threads)),
+        n_batch=max(64, int(n_batch)),
         verbose=False,
     )
+    return model
 
 
 def build_prompt(question: str, context: List[Tuple[int, str, str, str]]) -> str:
@@ -26,25 +45,68 @@ def build_prompt(question: str, context: List[Tuple[int, str, str, str]]) -> str
         context_lines.append(f"[{rowid}] {title} ({source})\n{text.strip()}")
 
     joined = "\n\n".join(context_lines)
-    return (
-        "You are a strictly grounded assistant. Answer only using the provided context. "
-        "If the answer is not in the context, respond with 'I don't know.'\n\n"
-        f"Context:\n{joined}\n\n"
-        f"Question: {question}\n"
-        "Answer with citations like [123]."
+    prompt_parts = [
+        "You are a helpful assistant. Answer directly and briefly.",
+        "Do not repeat the question.",
+    ]
+    if joined:
+        prompt_parts.extend(["", "Context:", joined])
+    prompt_parts.extend(
+        [
+            "",
+            "Q: What is the number after 9?",
+            "A: 10",
+            f"Q: {question}",
+            "A:",
+        ]
     )
+    return "\n".join(prompt_parts)
+
+
+def _remove_leading_query_echo(answer_text: str, question: str) -> str:
+    answer = (answer_text or "").strip()
+    query = (question or "").strip()
+    if not answer or not query:
+        return answer
+    if answer.lower().startswith(query.lower()):
+        trimmed = answer[len(query) :].lstrip(" \t\r\n:,-")
+        if trimmed.lower().startswith("a:"):
+            trimmed = trimmed[2:].lstrip(" \t\r\n:,-")
+        return trimmed
+    return answer
 
 
 def generate_answer(
-    llm, question: str, context: List[Tuple[int, str, str, str]], max_tokens: int = 256
+    llm,
+    question: str,
+    context: List[Tuple[int, str, str, str]],
+    *,
+    max_tokens: int = 192,
+    temperature: float = 0.35,
+    top_p: float = 0.9,
+    top_k: int = 40,
 ) -> str:
     prompt = build_prompt(question, context)
     try:
-        out = llm(prompt, max_tokens=max_tokens, temperature=0.0, top_p=1.0, top_k=1)
-        return out["choices"][0]["text"].strip()
+        out = llm(
+            prompt,
+            max_tokens=int(max_tokens),
+            temperature=float(temperature),
+            top_p=float(top_p),
+            top_k=int(top_k),
+            stop=STOP_SEQUENCES,
+        )
+        text = out["choices"][0]["text"]
+        return _remove_leading_query_echo(text, question)
     except Exception:
         # Fallback if the llama-cpp-python API differs
         out = llm.create_completion(
-            prompt=prompt, max_tokens=max_tokens, temperature=0.0, top_p=1.0, top_k=1
+            prompt=prompt,
+            max_tokens=int(max_tokens),
+            temperature=float(temperature),
+            top_p=float(top_p),
+            top_k=int(top_k),
+            stop=STOP_SEQUENCES,
         )
-        return out["choices"][0]["text"].strip()
+        text = out["choices"][0]["text"]
+        return _remove_leading_query_echo(text, question)

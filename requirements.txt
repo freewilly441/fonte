@@ -1,3 +1,6 @@
 numpy
-hnswlib
-sentence-transformers
+requests
+llama-cpp-python
+openai
+sv-ttk
+darkdetect

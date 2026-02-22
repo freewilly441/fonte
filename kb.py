@@ -1,4 +1,5 @@
 import sqlite3
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Tuple, Dict
@@ -14,6 +15,31 @@ class ChunkResult:
 
 CHUNK_SIZE = 800  # characters
 CHUNK_OVERLAP = 120
+_FTS5_TOKEN_RE = re.compile(r"\w+", re.UNICODE)
+_VECTOR_SETUP_HINT = "Install optional semantic dependencies with: pip install -r requirements-semantic.txt"
+
+
+def sanitize_fts5_query(query: str) -> str:
+    if not query:
+        return ""
+    tokens = _FTS5_TOKEN_RE.findall(query.strip())
+    if not tokens:
+        return ""
+    safe_tokens = [token.replace('"', '""') for token in tokens if token]
+    return " ".join(f'"{token}"' for token in safe_tokens)
+
+
+def _ensure_documents_columns(conn: sqlite3.Connection) -> None:
+    cur = conn.execute("PRAGMA table_info(documents)")
+    columns = {str(row[1]) for row in cur.fetchall()}
+    required = {
+        "source_url": "TEXT",
+        "fetched_at": "TEXT",
+        "license": "TEXT",
+    }
+    for name, col_type in required.items():
+        if name not in columns:
+            conn.execute(f"ALTER TABLE documents ADD COLUMN {name} {col_type}")
 
 
 def init_db(db_path: Path) -> None:
@@ -24,9 +50,13 @@ def init_db(db_path: Path) -> None:
             "id INTEGER PRIMARY KEY,"
             "title TEXT NOT NULL,"
             "source TEXT NOT NULL,"
-            "path TEXT"
+            "path TEXT,"
+            "source_url TEXT,"
+            "fetched_at TEXT,"
+            "license TEXT"
             ")"
         )
+        _ensure_documents_columns(conn)
         conn.execute(
             "CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5("
             "chunk_text, title, source, doc_id UNINDEXED"
@@ -49,14 +79,25 @@ def _chunk_text(text: str) -> List[str]:
     return chunks
 
 
-def add_document(db_path: Path, title: str, source: str, text: str, path: str | None) -> int:
+def add_document(
+    db_path: Path,
+    title: str,
+    source: str,
+    text: str,
+    path: str | None,
+    source_url: str | None = None,
+    fetched_at: str | None = None,
+    license_name: str | None = None,
+) -> int:
     chunks = _chunk_text(text)
     if not chunks:
         return -1
     with sqlite3.connect(db_path) as conn:
+        _ensure_documents_columns(conn)
         cur = conn.execute(
-            "INSERT INTO documents(title, source, path) VALUES(?, ?, ?)",
-            (title, source, path),
+            "INSERT INTO documents(title, source, path, source_url, fetched_at, license) "
+            "VALUES(?, ?, ?, ?, ?, ?)",
+            (title, source, path, source_url, fetched_at, license_name),
         )
         doc_id = cur.lastrowid
         for chunk in chunks:
@@ -73,17 +114,55 @@ def ingest_text_file(db_path: Path, file_path: Path, source: str) -> int:
     return add_document(db_path, title, source, text, str(file_path))
 
 
+def ingest_remote_text(
+    db_path: Path,
+    *,
+    title: str,
+    source: str,
+    text: str,
+    source_url: str,
+    fetched_at: str,
+    license_name: str | None = None,
+    path: str | None = None,
+) -> int:
+    return add_document(
+        db_path,
+        title=title,
+        source=source,
+        text=text,
+        path=path,
+        source_url=source_url,
+        fetched_at=fetched_at,
+        license_name=license_name,
+    )
+
+
 def search(db_path: Path, query: str, limit: int = 5) -> List[ChunkResult]:
+    results, _warning = search_with_feedback(db_path, query, limit=limit)
+    return results
+
+
+def search_with_feedback(
+    db_path: Path,
+    query: str,
+    limit: int = 5,
+) -> Tuple[List[ChunkResult], str | None]:
     if not query.strip():
-        return []
+        return [], None
+    safe_query = sanitize_fts5_query(query)
+    if not safe_query:
+        return [], None
     with sqlite3.connect(db_path) as conn:
-        cur = conn.execute(
-            "SELECT rowid, title, source, chunk_text, bm25(chunks_fts) as score "
-            "FROM chunks_fts WHERE chunks_fts MATCH ? "
-            "ORDER BY score LIMIT ?",
-            (query, limit),
-        )
-        return [ChunkResult(*row) for row in cur.fetchall()]
+        try:
+            cur = conn.execute(
+                "SELECT rowid, title, source, chunk_text, bm25(chunks_fts) as score "
+                "FROM chunks_fts WHERE chunks_fts MATCH ? "
+                "ORDER BY score LIMIT ?",
+                (safe_query, limit),
+            )
+        except sqlite3.OperationalError:
+            return [], "We couldn't search that exact punctuation. Try simpler keywords."
+        return [ChunkResult(*row) for row in cur.fetchall()], None
 
 
 def get_chunk_by_rowid(db_path: Path, rowid: int) -> ChunkResult | None:
@@ -127,12 +206,7 @@ def build_vector_index(
     index_path: Path,
     meta_path: Path,
 ) -> Tuple[int, int]:
-    try:
-        import numpy as np
-        import hnswlib
-        from sentence_transformers import SentenceTransformer
-    except Exception as exc:  # pragma: no cover - runtime dependency
-        raise RuntimeError(f"Missing vector dependencies: {exc}") from exc
+    np, hnswlib, SentenceTransformer = _load_vector_dependencies()
 
     chunks = list_all_chunks(db_path)
     if not chunks:
@@ -162,12 +236,7 @@ def vector_search(
     meta_path: Path,
     limit: int = 5,
 ) -> List[Tuple[int, float]]:
-    try:
-        import numpy as np
-        import hnswlib
-        from sentence_transformers import SentenceTransformer
-    except Exception as exc:  # pragma: no cover - runtime dependency
-        raise RuntimeError(f"Missing vector dependencies: {exc}") from exc
+    np, hnswlib, SentenceTransformer = _load_vector_dependencies()
 
     if not query.strip():
         return []
@@ -203,7 +272,7 @@ def hybrid_search(
     for rank, result in enumerate(lex_results):
         scores[result.rowid] = scores.get(result.rowid, 0.0) + 1.0 / (rank + 1)
 
-    if embed_model_path and embed_model_path.exists():
+    if embed_model_path and embed_model_path.exists() and _vector_dependencies_available():
         try:
             vec_results = vector_search(query, embed_model_path, index_path, meta_path, limit=limit)
             for rank, (rowid, score) in enumerate(vec_results):
@@ -222,9 +291,62 @@ def hybrid_search(
     return results
 
 
+def _load_vector_dependencies():
+    try:
+        import numpy as np
+        import hnswlib
+        from sentence_transformers import SentenceTransformer
+    except ImportError as exc:  # pragma: no cover - runtime dependency
+        raise RuntimeError(
+            f"Missing vector dependencies ({exc}). {_VECTOR_SETUP_HINT}"
+        ) from exc
+    return np, hnswlib, SentenceTransformer
+
+
+def _vector_dependencies_available() -> bool:
+    try:
+        _load_vector_dependencies()
+    except RuntimeError:
+        return False
+    return True
+
+
 def list_documents(db_path: Path) -> List[Tuple[int, str, str, str]]:
     with sqlite3.connect(db_path) as conn:
         cur = conn.execute("SELECT id, title, source, path FROM documents ORDER BY id DESC")
+        return cur.fetchall()
+
+
+def count_documents(db_path: Path) -> int:
+    with sqlite3.connect(db_path) as conn:
+        cur = conn.execute("SELECT COUNT(*) FROM documents")
+        row = cur.fetchone()
+    return int(row[0]) if row else 0
+
+
+def list_documents_paged(
+    db_path: Path,
+    *,
+    limit: int,
+    offset: int,
+) -> List[Tuple[int, str, str, str]]:
+    with sqlite3.connect(db_path) as conn:
+        cur = conn.execute(
+            "SELECT id, title, source, path FROM documents ORDER BY id DESC LIMIT ? OFFSET ?",
+            (max(1, int(limit)), max(0, int(offset))),
+        )
+        return cur.fetchall()
+
+
+def list_documents_with_meta(
+    db_path: Path,
+) -> List[Tuple[int, str, str, str | None, str | None, str | None, str | None]]:
+    with sqlite3.connect(db_path) as conn:
+        _ensure_documents_columns(conn)
+        cur = conn.execute(
+            "SELECT id, title, source, path, source_url, fetched_at, license "
+            "FROM documents ORDER BY id DESC"
+        )
         return cur.fetchall()
 
 

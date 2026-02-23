@@ -1,39 +1,28 @@
----
-
-# 📄
-
 ````markdown
 # Fonte
 
-Fonte is an offline-first, multilingual knowledge base and Q&A desktop application built with Python and Tkinter. It provides local search, grounded answers from user-supplied documents, and optional on-device LLM support, designed to run reliably even in constrained or disconnected environments.
+Fonte is an offline-first, multilingual knowledge base and Q&A application built with Python and Tkinter. It provides local search, grounded answers from user-supplied documents, and optional local LLM support, designed to run reliably even in constrained or disconnected environments.
 
----
+## Project intent
 
-## Project Intent
-
-- Intended to run on Linux-kernel Android mobile devices with limited resources  
-- Designed for limited or no internet/cell service  
-- Provides an offline knowledge base with local retrieval-augmented generation (RAG)  
-- Supports optional local LLM backends  
-- Current implementation is a Tkinter desktop MVP  
-- Android packaging and mobile deployment are future targets  
-
----
+- Targets Linux-kernel Android mobile devices with limited resources (future target)
+- Designed for limited or no internet/cell service
+- Offline knowledge base with retrieval-augmented generation (RAG)
+- Optional local LLM backends
+- Current implementation is a Tkinter desktop MVP
 
 ## Features
 
-- Local-first storage of documents, embeddings, and configuration  
-- Retrieval-augmented Q&A from local files  
-- GUI workflow for language selection and diagnostics  
-- Optional local LLM support  
-- Lightweight core with minimal dependencies  
-- Works offline by design  
-
----
+- Local-first storage of documents, embeddings, and configuration
+- Retrieval-augmented Q&A from local files
+- GUI workflow for language selection and basic diagnostics
+- Optional local LLM support (multiple backends)
+- Lightweight core dependency set for baseline use
+- Offline by default
 
 ## Quickstart
 
-### Windows (Native Python)
+### Windows (native Python)
 
 ```bat
 py -m venv .venv
@@ -42,9 +31,7 @@ pip install -r requirements.txt
 python app.py
 ````
 
----
-
-### WSL / Linux (Ubuntu / Debian)
+### WSL / Linux (Ubuntu/Debian)
 
 ```bash
 python3 -m venv .venv
@@ -53,27 +40,21 @@ pip install -r requirements.txt
 python3 app.py
 ```
 
----
+## Optional dependencies
 
-## Optional Dependencies
-
-### Local LLM Support (GGUF / llama.cpp)
+### Local LLM support (GGUF / llama.cpp)
 
 ```bash
 pip install -r requirements-llm.txt
 ```
 
----
-
-### Packaging / Build Tooling
+### Packaging / build tooling
 
 ```bash
 pip install -r requirements-packaging.txt
 ```
 
----
-
-## Minimal vs Semantic Setup
+## Minimal vs semantic setup
 
 Default install is lightweight and CPU-friendly:
 
@@ -81,37 +62,27 @@ Default install is lightweight and CPU-friendly:
 pip install -r requirements.txt
 ```
 
-Includes:
+This includes lexical retrieval via SQLite FTS and the core application.
 
-* Lexical retrieval via SQLite FTS
-* Local document indexing
-* Optional lightweight LLM integration
-
----
-
-### Semantic / Vector Retrieval (Optional)
+Semantic/vector retrieval can be added separately:
 
 ```bash
 pip install -r requirements-semantic.txt
 ```
 
-Why separate?
+Why separate? Semantic stacks (e.g., sentence-transformers + hnswlib) often pull large ML runtimes (especially PyTorch), increasing disk usage and install time.
 
-Semantic stacks typically pull large ML runtimes (e.g., PyTorch), greatly increasing disk usage and install time.
-
----
-
-## LM Studio Backend (Recommended)
+## LM Studio backend (recommended)
 
 Fonte can use LM Studio as a local OpenAI-compatible LLM server.
 
-Start LM Studio server:
+Start the LM Studio server:
 
 ```bash
 lms server start --port 1234
 ```
 
-Ensure models are loaded:
+Load models (examples):
 
 ```bash
 lms load google/gemma-3-1b
@@ -124,11 +95,7 @@ Default configuration:
 * Small model: `google/gemma-3-1b`
 * Large model: `qwen/qwen3-1.7b`
 
----
-
-## Ollama Backend (Optional)
-
-Fonte can use Ollama instead of a local GGUF model.
+## Ollama backend (optional)
 
 Start Ollama:
 
@@ -146,11 +113,9 @@ Configure in Fonte:
 
 * Backend: `ollama`
 * URL: `http://127.0.0.1:11434`
-* Model: e.g. `llama3.2:3b`
+* Model: `llama3.2:3b`
 
----
-
-## Mobile Linux / Android (Headless CLI)
+## Mobile Linux / Android (headless CLI)
 
 For Termux or Linux-based Android environments:
 
@@ -166,33 +131,27 @@ Ingest documents:
 python3 fonte_mobile_parallel.py ingest ./data/user_docs --workers 4
 ```
 
-Ask questions:
+Ask:
 
 ```bash
 python3 fonte_mobile_parallel.py ask "What does this knowledge base contain?"
 ```
 
----
-
-### Import from Wikipedia (Online)
+Import from Wikipedia (online):
 
 ```bash
 python3 fonte_mobile_parallel.py ingest-wikipedia "solar system" --limit 5 --lang en
 ```
 
----
-
-### Batch Processing
+Batch ask:
 
 ```bash
 python3 fonte_mobile_parallel.py batch-ask queries.txt --workers 4
 ```
 
----
+## Android flashable package
 
-## Android Flashable Package
-
-Build deployable package:
+Build:
 
 ```bash
 ./scripts/build_android_flashable.sh
@@ -200,31 +159,25 @@ Build deployable package:
 
 Output:
 
-```
-dist/fonte-mobile-flashable.zip
-```
+* `dist/fonte-mobile-flashable.zip`
 
-Includes:
+Includes Termux installer and mobile runner scripts under `mobile/`.
 
-* Termux installer
-* Runtime scripts
-* Headless CLI tools
+## Lightweight Android emulator
 
----
-
-## Lightweight Android Emulator
-
-Build emulator:
+Build and start:
 
 ```bash
 ./scripts/android_emulator_light.sh build
 ./scripts/android_emulator_light.sh start
 ```
 
-Import existing image:
+Import an existing image:
 
 ```bash
 ./scripts/android_emulator_light.sh import /path/to/fonte-lite.avd
+# or:
+./scripts/android_emulator_light.sh import /path/to/fonte-lite-avd.tar.gz
 ```
 
 List installed AVDs:
@@ -233,52 +186,26 @@ List installed AVDs:
 ./scripts/android_emulator_light.sh list
 ```
 
-Requirements:
+Notes:
 
-* Android command-line tools
-* ANDROID_SDK_ROOT configured
+* Requires Android command-line tools (`sdkmanager`, `avdmanager`, `emulator`) under `ANDROID_SDK_ROOT`
+* Defaults are optimized for low resource usage
 
----
+## WSL / WSLg GUI notes
 
-## WSL / WSLg GUI Notes
+WSLg is simplest on Windows 11. If WSLg is working, `WAYLAND_DISPLAY` should be set and `/mnt/wslg` should exist.
 
-WSLg is recommended on Windows 11.
-
-Requirements:
-
-* `WAYLAND_DISPLAY` set
-* `/mnt/wslg` present
-
-Without WSLg:
-
-* Install X server (VcXsrv, X410, etc.)
-* Export display:
+Without WSLg, you need an X server on Windows (VcXsrv, X410, etc.) and `DISPLAY` exported:
 
 ```bash
 export DISPLAY=:0
 ```
 
----
+## Runtime data location
 
-## Runtime Data Location
+All runtime data (config, documents, embeddings) is stored under `./data` and is ignored by git.
 
-All runtime data is stored in:
-
-```
-./data
-```
-
-Includes:
-
-* Config
-* Documents
-* Embeddings
-
-Ignored by git.
-
----
-
-## Environment Variables
+## Environment variables
 
 Enable debug mode:
 
@@ -286,18 +213,15 @@ Enable debug mode:
 FONTE_DEBUG=1 python3 app.py
 ```
 
-PowerShell:
+PowerShell example:
 
 ```powershell
 $env:FONTE_DEBUG=1; python app.py
 ```
 
----
+## License
 
-Make Run (Optional)
+Add license information here if a `LICENSE` file is added.
 
-You may add a local make run shortcut, but no heavy tooling is required.
+````
 
-License
-
-Add license information here if a LICENSE file is added.

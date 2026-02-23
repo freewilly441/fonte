@@ -40,3 +40,6 @@ desktop.ini
 vector_index.bin
 vector_meta.npz
 *.gguf
+
+# local backups
+backups/

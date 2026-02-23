@@ -1,28 +1,6 @@
-Perfect timing to update it while you’re mid-rebase 👍
-Let’s do this **cleanly and safely** so your README reflects the new LM Studio + mobile direction.
-
-You have two good options right now:
-
-* ✅ Replace README with your new version (recommended)
-* ⚠️ Try to merge old + new (not worth it here)
-
-We’ll replace it.
-
 ---
 
-## 🧠 Step 1 — Overwrite README.md with your new content
-
-From your repo root:
-
-```bash
-nano README.md
-```
-
-Paste this **refined, production-ready version** (I cleaned formatting, headings, consistency, and added LM Studio support since you wired it in):
-
----
-
-# 📄 NEW README CONTENT (paste this)
+# 📄
 
 ````markdown
 # Fonte

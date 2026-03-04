@@ -1688,6 +1688,18 @@ class KnowledgeApp(tk.Tk):
         try:
             mode = task_router.detect_mode(str(question or ""))
             messages = task_router.build_messages(str(question or ""), context, mode)
+            selected_language = {
+                "en": "English",
+                "de": "German",
+                "pt": "Portuguese",
+            }.get(str(self.__dict__.get("ui_language", "en") or "").strip().lower(), "English")
+            language_prompts = {
+                "English": "Respond in English.",
+                "German": "Antworte auf Deutsch.",
+                "Portuguese": "Responda em português.",
+            }
+            language_instruction = language_prompts.get(selected_language, "Respond in English.")
+            messages = [{"role": "system", "content": language_instruction}] + messages
             model_id = task_router.select_model_id(mode, str(question or ""), self.cfg)
             if not model_id:
                 return "LM Studio model is not configured. Set model_small_id or model_large_id in Settings."

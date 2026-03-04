@@ -43,3 +43,4 @@ vector_meta.npz
 
 # local backups
 backups/
+*.bak

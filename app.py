@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 import tkinter.font as tkfont
+import atexit
 import math
 import os
 import sys
@@ -19,6 +20,7 @@ import utils
 import config
 import llm as llm_api
 import llm_lmstudio
+import runtime
 import model_manager
 import task_router
 from analytics import AnalyticsTracker
@@ -720,6 +722,8 @@ class KnowledgeApp(tk.Tk):
         self._state_save_after_id = None
         self._status_after_id = None
         self._status_snapshot = None
+        self._runtime_bootstrap_started = False
+        self._runtime_bootstrap_failed = False
         self.search_inflight = False
         self.docs_page_index = 0
         self.docs_page_total = 0
@@ -766,6 +770,7 @@ class KnowledgeApp(tk.Tk):
         debug("building ui")
         self._build_ui()
         debug("ui built")
+        self._start_runtime_bootstrap()
         self.docs_page_index = self.app_state.docs_page
         if self.app_state.qa_draft:
             self.qa_var.set(self.app_state.qa_draft)
@@ -3252,6 +3257,56 @@ class KnowledgeApp(tk.Tk):
         self.status_var.set(self.tr(status_key, activity=activity))
         self._status_after_id = self.after(transient_ms, self._update_status_bar_from_snapshot)
 
+    def _set_runtime_bootstrap_status(self, message: str, *, busy: bool = True) -> None:
+        if self._is_closing or not hasattr(self, "status_var"):
+            return
+        if busy:
+            self.status_var.set(message)
+            if hasattr(self, "status_progress"):
+                self.status_progress.grid()
+                self.status_progress.start(12)
+            return
+        if hasattr(self, "status_progress"):
+            self.status_progress.stop()
+            self.status_progress.grid_remove()
+        self.status_var.set(message)
+
+    def _on_runtime_bootstrap_success(self) -> None:
+        if self._is_closing:
+            return
+        if hasattr(self, "status_progress"):
+            self.status_progress.stop()
+            self.status_progress.grid_remove()
+        self._update_status_bar_from_snapshot()
+
+    def _on_runtime_bootstrap_failure(self) -> None:
+        if self._is_closing:
+            return
+        self._set_runtime_bootstrap_status("AI runtime failed to initialize", busy=False)
+        if hasattr(self, "answer_status_var"):
+            self.answer_status_var.set("AI runtime failed to initialize")
+
+    def _start_runtime_bootstrap(self) -> None:
+        if self._runtime_bootstrap_started:
+            return
+        self._runtime_bootstrap_started = True
+        self._set_runtime_bootstrap_status("Initializing AI runtime...", busy=True)
+
+        def publish(message: str) -> None:
+            self.after(0, lambda msg=message: self._set_runtime_bootstrap_status(msg, busy=True))
+
+        def worker() -> None:
+            try:
+                runtime.bootstrap_runtime(status_callback=publish)
+            except Exception as exc:
+                self._runtime_bootstrap_failed = True
+                debug(f"runtime bootstrap failed: {exc}")
+                self.after(0, self._on_runtime_bootstrap_failure)
+                return
+            self.after(0, self._on_runtime_bootstrap_success)
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def _language_display_name(self, code: str) -> str:
         key = f"lang_{code}"
         return self.tr(key) if key in I18N.get(self.ui_language, {}) else code
@@ -3390,6 +3445,7 @@ class KnowledgeApp(tk.Tk):
 
 
 if __name__ == "__main__":
+    atexit.register(runtime.shutdown_runtime)
     if os.getenv("FONTE_TRANSLATE_EXAMPLE") == "1":
         translated = translate("hello world", "en", "pt")
         debug(f"offline translation example: {translated}")

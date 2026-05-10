@@ -44,3 +44,45 @@ vector_meta.npz
 # local backups
 backups/
 *.bak
+# Runtime manager backup artifacts
+*.bak_*
+app.py.bak_runtime_bootstrap
+app.py.bak_runtime_manager
+runtime.py.bak_runtime_manager
+
+# Temporary runtime/debug files
+*.tmp
+*.temp
+
+# Linux packaging artifacts
+*.AppImage
+*.deb
+*.rpm
+*.tar.gz
+*.tar.xz
+
+# Packaging output directories
+packaging/build/
+packaging/output/
+packaging/dist/
+
+# PyInstaller / Nuitka artifacts
+*.manifest
+*.pkg
+*.exe
+
+# Linux metadata
+*.desktop
+*.service
+
+# Testing/runtime state
+.cache/
+pytest_cache/
+.mypy_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Coverage reports
+.coverage
+htmlcov/

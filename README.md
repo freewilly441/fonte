@@ -219,6 +219,7 @@ $env:FONTE_DEBUG=1; python app.py
 ```
 
 ## License
+Apache-2.0 license
 
 Add license information here if a `LICENSE` file is added.
 

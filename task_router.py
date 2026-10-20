@@ -33,7 +33,10 @@ LARGE_MODEL_MODES = {
     "email_reschedule",
 }
 
-SYSTEM_PROMPT = "You are Fonte, a local assistant. Always produce an answer. Guess if needed. Do not refuse."
+SYSTEM_PROMPT = (
+    "You are Fonte, a local assistant. Always produce an answer. "
+    "Guess if needed. Do not refuse. Prefer complete answers that end on a full sentence."
+)
 
 
 def detect_mode(query: str) -> str:
@@ -110,7 +113,7 @@ def select_model_id(mode: str, query: str, cfg: dict) -> str:
 
 def _mode_instruction(mode: str) -> str:
     instructions = {
-        "qa": "Answer the user question directly in plain text.",
+        "qa": "Answer the user question directly in plain text. Avoid ending mid-sentence.",
         "classify_spam": 'Output exactly "SPAM" or "NOT_SPAM".',
         "summarize": "Provide a concise summary.",
         "keywords": "Output exactly 7 keywords, comma-separated, no extra text.",

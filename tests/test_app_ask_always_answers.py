@@ -21,8 +21,8 @@ class AskAlwaysAnswersTests(unittest.TestCase):
         app = KnowledgeApp.__new__(KnowledgeApp)
         app.cfg = _Cfg(
             {
-                "max_tokens": "192",
-                "llm_max_tokens": "192",
+                "max_tokens": "1024",
+                "llm_max_tokens": "1024",
                 "temperature": "0.2",
                 "timeout_seconds": "20",
                 "lmstudio_base_url": "http://localhost:1234/v1",
@@ -40,7 +40,7 @@ class AskAlwaysAnswersTests(unittest.TestCase):
         self.assertTrue(payload["answer_text"].strip())
         self.assertFalse(payload["had_context"])
         self.assertEqual(payload["citations"], [])
-        mock_search.assert_called_once_with(DB_PATH, "What is Foo?", limit=4)
+        mock_search.assert_called_once_with(DB_PATH, "What is Foo?", limit=6)
         self.assertTrue(mock_chat.called)
 
     def test_direct_fallback_answers_simple_number_after_question(self):

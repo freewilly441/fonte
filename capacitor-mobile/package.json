@@ -1,0 +1,26 @@
+{
+  "name": "fonte-mobile",
+  "version": "1.0.0",
+  "description": "Fonte - Local LLM Chat for Android/iOS via Capacitor",
+  "main": "index.js",
+  "scripts": {
+    "dev": "web-dev-server --app-index www/index.html --node-resolve --open",
+    "build": "echo 'Build handled by Capacitor'",
+    "cap:add:android": "cap add android",
+    "cap:sync": "cap sync",
+    "cap:open:android": "cap open android",
+    "cap:run:android": "cap run android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^5.5.0",
+    "@capacitor/core": "^5.5.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^5.5.0",
+    "typescript": "^6.0.3"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

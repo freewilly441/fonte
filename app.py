@@ -210,12 +210,18 @@ def _print_no_display_help(reason: str | None = None) -> None:
     print("How to run: python3 app.py")
 
 PROFILES = {
-    "low": {"retrieval_limit": 3, "llm_max_tokens": 160},
-    "balanced": {"retrieval_limit": 4, "llm_max_tokens": 192},
-    "high": {"retrieval_limit": 6, "llm_max_tokens": 256},
+    "low": {"retrieval_limit": 6, "llm_max_tokens": 1024},
+    "balanced": {"retrieval_limit": 6, "llm_max_tokens": 1024},
+    "high": {"retrieval_limit": 6, "llm_max_tokens": 1024},
 }
 
 LLM_BACKENDS = ["lmstudio", "llama_cpp"]
+DEFAULT_CONTEXT_WINDOW = 8192
+FALLBACK_CONTEXT_WINDOW = 4096
+DEFAULT_MAX_OUTPUT_TOKENS = 1024
+DEFAULT_RETRIEVAL_LIMIT = 6
+MAX_RETRIEVAL_LIMIT = 12
+MAX_CHAT_HISTORY_TURNS = 4
 
 LANG_CHOICES = [
     ("English", "en"),
@@ -1375,20 +1381,28 @@ class KnowledgeApp(tk.Tk):
     def _build_search_answer(self, query: str, results: list[kb.ChunkResult]) -> str:
         if self.search_answer_cancel_event is not None and self.search_answer_cancel_event.is_set():
             return ""
-        context = [(r.rowid, r.title, r.source, r.chunk_text) for r in results[:4]]
+        context = [(r.rowid, r.title, r.source, r.chunk_text) for r in results[:DEFAULT_RETRIEVAL_LIMIT]]
         llm_answer = ""
         try:
             if self.llm is None:
                 self._ensure_llm()
-            max_tokens = int(self.cfg.get("llm_max_tokens") or 192)
-            low_resource = (self.cfg.get("ai_low_resource_mode") or "true").strip().lower() == "true"
-            max_tokens = max(80, min(192 if low_resource else 256, max_tokens))
+            max_tokens = self._resolve_max_output_tokens()
+            prompt_tokens = max(1, len(llm_api.build_prompt(query, context)) // 4)
+            self._log_generation_settings(
+                source="search",
+                model=str(self._effective_llm_model_path().name or "embedded-llama.cpp"),
+                context_window=self._active_context_window(),
+                retrieved_chunk_count=len(context),
+                prompt_tokens=prompt_tokens,
+                max_output_tokens=max_tokens,
+                backend="llama_cpp",
+            )
             llm_answer = llm_api.generate_answer(
                 self.llm,
                 query,
                 context,
                 max_tokens=max_tokens,
-                temperature=0.3 if low_resource else 0.45,
+                temperature=0.3 if self._low_resource_mode_enabled() else 0.45,
             )
             if self.search_answer_cancel_event is not None and self.search_answer_cancel_event.is_set():
                 return ""
@@ -1540,11 +1554,7 @@ class KnowledgeApp(tk.Tk):
         threading.Thread(target=worker, daemon=True).start()
 
     def _build_qa_response(self, query: str) -> dict[str, list[str] | str | bool]:
-        try:
-            retrieval_limit = int(str(self.cfg.get("retrieval_limit") or "4").strip())
-        except ValueError:
-            retrieval_limit = 4
-        retrieval_limit = max(1, min(12, retrieval_limit))
+        retrieval_limit = self._resolve_retrieval_limit()
         try:
             results = kb.search(DB_PATH, query, limit=retrieval_limit)
         except Exception as exc:
@@ -1692,6 +1702,7 @@ class KnowledgeApp(tk.Tk):
         safe_fallback = self._direct_fallback_answer(question, context)
         try:
             mode = task_router.detect_mode(str(question or ""))
+            history = self._recent_qa_history()
             messages = task_router.build_messages(str(question or ""), context, mode)
             selected_language = {
                 "en": "English",
@@ -1704,14 +1715,11 @@ class KnowledgeApp(tk.Tk):
                 "Portuguese": "Responda em português.",
             }
             language_instruction = language_prompts.get(selected_language, "Respond in English.")
-            messages = [{"role": "system", "content": language_instruction}] + messages
+            messages = [{"role": "system", "content": language_instruction}] + history + messages
             model_id = task_router.select_model_id(mode, str(question or ""), self.cfg)
             if not model_id:
                 return "LM Studio model is not configured. Set model_small_id or model_large_id in Settings."
-            try:
-                max_tokens = int(str(self.cfg.get("max_tokens", self.cfg.get("llm_max_tokens", "192"))).strip())
-            except ValueError:
-                max_tokens = 192
+            max_tokens = self._resolve_max_output_tokens()
             try:
                 timeout_seconds = int(str(self.cfg.get("timeout_seconds") or "20").strip())
             except ValueError:
@@ -1721,6 +1729,16 @@ class KnowledgeApp(tk.Tk):
             except ValueError:
                 temperature = 0.2
             base_url = str(self.cfg.get("lmstudio_base_url") or "http://localhost:1234/v1").strip()
+            prompt_tokens = self._approximate_prompt_tokens(messages)
+            self._log_generation_settings(
+                source="qa",
+                model=model_id,
+                context_window=self._active_context_window(),
+                retrieved_chunk_count=len(context),
+                prompt_tokens=prompt_tokens,
+                max_output_tokens=max_tokens,
+                backend=str(self.cfg.get("llm_backend", "lmstudio")).strip().lower(),
+            )
             if mode == "json_title_summary_tags":
                 payload = llm_lmstudio.chat_json(
                     messages=messages,
@@ -1740,7 +1758,8 @@ class KnowledgeApp(tk.Tk):
                     timeout=timeout_seconds,
                     base_url=base_url,
                 )
-            final = str(text or "").strip()
+            final = self._finalize_answer_text(text)
+            self._remember_qa_turn(question, final)
             return final if final else safe_fallback
         except Exception as exc:
             mapped = map_exception(exc)
@@ -1777,28 +1796,42 @@ class KnowledgeApp(tk.Tk):
                 model_path = self._effective_llm_model_path()
             if not model_path.exists():
                 return False
-        low_resource = (self.cfg.get("ai_low_resource_mode") or "true").strip().lower() == "true"
-        try:
-            n_ctx = int(self.cfg.get("llm_context_window") or "1536")
-        except ValueError:
-            n_ctx = 1536
-        if low_resource:
-            n_ctx = min(n_ctx, 1024)
-        try:
-            loaded_llm = llm_api.load_llm(
-                backend="llama_cpp",
-                model_path=model_path,
-                n_ctx=n_ctx,
-                n_threads=max(1, os.cpu_count() or 2),
-                n_batch=128 if low_resource else 256,
-            )
-            self.llm = loaded_llm
-            return True
-        except Exception as exc:
-            self.llm = None
-            mapped = map_exception(exc)
-            self.analytics.track("api_error", screen="qa", category=mapped.code, detail=mapped.debug_message)
-            return False
+        low_resource = self._low_resource_mode_enabled()
+        requested_ctx = self._resolve_context_window()
+        attempted_contexts: list[int] = []
+        candidate_contexts = [requested_ctx]
+        if requested_ctx > FALLBACK_CONTEXT_WINDOW:
+            candidate_contexts.append(FALLBACK_CONTEXT_WINDOW)
+        if FALLBACK_CONTEXT_WINDOW > 2048:
+            candidate_contexts.append(2048)
+        last_exc: Exception | None = None
+        for n_ctx in candidate_contexts:
+            if n_ctx in attempted_contexts:
+                continue
+            attempted_contexts.append(n_ctx)
+            try:
+                loaded_llm = llm_api.load_llm(
+                    backend="llama_cpp",
+                    model_path=model_path,
+                    n_ctx=n_ctx,
+                    n_threads=max(1, os.cpu_count() or 2),
+                    n_batch=128 if low_resource else 256,
+                )
+                self.llm = loaded_llm
+                self._active_llm_context = n_ctx
+                if n_ctx != requested_ctx:
+                    debug(f"llama.cpp context clamped from requested={requested_ctx} to active={n_ctx}")
+                else:
+                    debug(f"llama.cpp context active={n_ctx}")
+                return True
+            except Exception as exc:
+                last_exc = exc
+                debug(f"llama.cpp load failed for n_ctx={n_ctx}: {exc}")
+        self.llm = None
+        self._active_llm_context = None
+        mapped = map_exception(last_exc or RuntimeError("Unable to initialize llama.cpp"))
+        self.analytics.track("api_error", screen="qa", category=mapped.code, detail=mapped.debug_message)
+        return False
 
     def _shutdown_llm(self):
         llm_obj = self.llm
@@ -1811,6 +1844,116 @@ class KnowledgeApp(tk.Tk):
             except Exception as exc:
                 debug(f"llm close failed: {exc}")
         self.llm = None
+        self._active_llm_context = None
+
+    def _low_resource_mode_enabled(self) -> bool:
+        return (self.cfg.get("ai_low_resource_mode") or "true").strip().lower() == "true"
+
+    def _resolve_context_window(self) -> int:
+        try:
+            requested = int(str(self.cfg.get("llm_context_window") or str(DEFAULT_CONTEXT_WINDOW)).strip())
+        except ValueError:
+            requested = DEFAULT_CONTEXT_WINDOW
+        clamped = max(512, min(DEFAULT_CONTEXT_WINDOW, requested))
+        if clamped != requested:
+            debug(f"context window clamped from requested={requested} to active={clamped}")
+        return clamped
+
+    def _resolve_max_output_tokens(self) -> int:
+        raw_value = self.cfg.get("max_tokens", self.cfg.get("llm_max_tokens", str(DEFAULT_MAX_OUTPUT_TOKENS)))
+        try:
+            requested = int(str(raw_value).strip())
+        except ValueError:
+            requested = DEFAULT_MAX_OUTPUT_TOKENS
+        clamped = max(32, min(4096, requested))
+        if clamped != requested:
+            debug(f"max output tokens clamped from requested={requested} to active={clamped}")
+        return clamped
+
+    def _resolve_retrieval_limit(self) -> int:
+        try:
+            requested = int(str(self.cfg.get("retrieval_limit") or str(DEFAULT_RETRIEVAL_LIMIT)).strip())
+        except ValueError:
+            requested = DEFAULT_RETRIEVAL_LIMIT
+        clamped = max(1, min(MAX_RETRIEVAL_LIMIT, requested))
+        if clamped != requested:
+            debug(f"retrieval limit clamped from requested={requested} to active={clamped}")
+        return clamped
+
+    def _recent_qa_history(self) -> list[dict[str, str]]:
+        turns = getattr(self, "_qa_turn_history", [])
+        recent = turns[-MAX_CHAT_HISTORY_TURNS:]
+        messages: list[dict[str, str]] = []
+        for turn in recent:
+            question = str(turn.get("question", "")).strip()
+            answer = str(turn.get("answer", "")).strip()
+            if question:
+                messages.append({"role": "user", "content": question})
+            if answer:
+                messages.append({"role": "assistant", "content": answer})
+        return messages
+
+    def _remember_qa_turn(self, question: str, answer: str) -> None:
+        if not question or not answer:
+            return
+        turns = list(getattr(self, "_qa_turn_history", []))
+        turns.append({"question": str(question).strip(), "answer": str(answer).strip()})
+        self._qa_turn_history = turns[-MAX_CHAT_HISTORY_TURNS:]
+
+    def _approximate_prompt_tokens(self, messages: list[dict[str, str]]) -> int:
+        text = "\n".join(str(message.get("content", "")) for message in messages)
+        return max(1, len(text) // 4)
+
+    def _active_context_window(self) -> int:
+        backend = str(self.cfg.get("llm_backend", "lmstudio")).strip().lower()
+        if backend == "llama_cpp":
+            return int(getattr(self, "_active_llm_context", None) or self._resolve_context_window())
+        return self._resolve_context_window()
+
+    def _log_generation_settings(
+        self,
+        *,
+        source: str,
+        model: str,
+        context_window: int,
+        retrieved_chunk_count: int,
+        prompt_tokens: int,
+        max_output_tokens: int,
+        backend: str,
+    ) -> None:
+        self.analytics.track(
+            "llm_generation",
+            source=source,
+            backend=backend,
+            model=model,
+            retrieved_chunk_count=retrieved_chunk_count,
+            approx_prompt_tokens=prompt_tokens,
+            max_output_tokens=max_output_tokens,
+            context_window=context_window,
+            chunk_size=kb.CHUNK_SIZE,
+            chunk_overlap=kb.CHUNK_OVERLAP,
+        )
+        debug(
+            "generation "
+            f"source={source} backend={backend} model={model} "
+            f"retrieved_chunks={retrieved_chunk_count} approx_prompt_tokens={prompt_tokens} "
+            f"max_output_tokens={max_output_tokens} context_window={context_window} "
+            f"chunk_size={kb.CHUNK_SIZE} chunk_overlap={kb.CHUNK_OVERLAP}"
+        )
+
+    def _finalize_answer_text(self, text: str | None) -> str:
+        final = str(text or "").strip()
+        if not final:
+            return ""
+        if final[-1:] in ".!?)]}\"'":
+            return final
+        sentence_endings = [final.rfind(mark) for mark in (". ", "! ", "? ", ".", "!", "?")]
+        best = max(sentence_endings)
+        if best >= max(40, int(len(final) * 0.6)):
+            trimmed = final[: best + 1].strip()
+            if trimmed:
+                return trimmed
+        return final + "."
 
     def _build_utils_tab(self):
         frame = self.utils_tab
@@ -2063,7 +2206,7 @@ class KnowledgeApp(tk.Tk):
         context_label = ttk.Label(llm_row)
         self._i18n_widget(context_label, "llm_context_window")
         context_label.grid(row=0, column=2, sticky="w")
-        self.llm_context_var = tk.StringVar(value=self.cfg.get("llm_context_window", "1536"))
+        self.llm_context_var = tk.StringVar(value=self.cfg.get("llm_context_window", str(DEFAULT_CONTEXT_WINDOW)))
         ttk.Entry(llm_row, textvariable=self.llm_context_var, width=10).grid(row=0, column=3, sticky="w", padx=6)
 
         llm_row2 = ttk.Frame(self.advanced_frame)
@@ -2104,7 +2247,9 @@ class KnowledgeApp(tk.Tk):
         max_tokens_label = ttk.Label(llm_row3)
         self._i18n_widget(max_tokens_label, "lmstudio_max_tokens")
         max_tokens_label.grid(row=0, column=4, sticky="w")
-        self.max_tokens_var = tk.StringVar(value=self.cfg.get("max_tokens", self.cfg.get("llm_max_tokens", "192")))
+        self.max_tokens_var = tk.StringVar(
+            value=self.cfg.get("max_tokens", self.cfg.get("llm_max_tokens", str(DEFAULT_MAX_OUTPUT_TOKENS)))
+        )
         ttk.Entry(llm_row3, textvariable=self.max_tokens_var, width=8).grid(row=0, column=5, sticky="w", padx=(4, 12))
         timeout_label = ttk.Label(llm_row3)
         self._i18n_widget(timeout_label, "lmstudio_timeout")
@@ -2892,10 +3037,10 @@ class KnowledgeApp(tk.Tk):
         self.cfg["llm_backend"] = "lmstudio"
         self.cfg["ai_provider"] = "local"
         try:
-            ctx = int(str(self.llm_context_var.get() or "1536").strip())
+            ctx = int(str(self.llm_context_var.get() or str(DEFAULT_CONTEXT_WINDOW)).strip())
         except ValueError:
-            ctx = 1536
-        self.cfg["llm_context_window"] = str(max(512, min(4096, ctx)))
+            ctx = DEFAULT_CONTEXT_WINDOW
+        self.cfg["llm_context_window"] = str(max(512, min(DEFAULT_CONTEXT_WINDOW, ctx)))
         self.cfg["ai_low_resource_mode"] = "true" if self.low_resource_var.get() else "false"
         self.cfg["lmstudio_base_url"] = str(self.lmstudio_base_url_var.get() or "").strip() or "http://localhost:1234/v1"
         self.cfg["model_small_id"] = str(self.model_small_id_var.get() or "").strip()
@@ -2906,9 +3051,9 @@ class KnowledgeApp(tk.Tk):
             temperature = 0.2
         self.cfg["temperature"] = str(max(0.0, min(1.5, temperature)))
         try:
-            max_tokens = int(str(self.max_tokens_var.get() or "192").strip())
+            max_tokens = int(str(self.max_tokens_var.get() or str(DEFAULT_MAX_OUTPUT_TOKENS)).strip())
         except ValueError:
-            max_tokens = 192
+            max_tokens = DEFAULT_MAX_OUTPUT_TOKENS
         self.cfg["max_tokens"] = str(max(16, min(4096, max_tokens)))
         self.cfg["llm_max_tokens"] = self.cfg["max_tokens"]
         try:
@@ -2947,13 +3092,13 @@ class KnowledgeApp(tk.Tk):
         profile_cfg = PROFILES.get(profile, PROFILES["low"])
         self.cfg.setdefault("retrieval_limit", str(profile_cfg["retrieval_limit"]))
         self.cfg.setdefault("llm_max_tokens", str(profile_cfg["llm_max_tokens"]))
-        self.cfg.setdefault("max_tokens", self.cfg.get("llm_max_tokens", "192"))
+        self.cfg.setdefault("max_tokens", self.cfg.get("llm_max_tokens", str(DEFAULT_MAX_OUTPUT_TOKENS)))
         self.cfg.setdefault("temperature", "0.2")
         self.cfg.setdefault("timeout_seconds", "20")
         self.cfg.setdefault("lmstudio_base_url", "http://localhost:1234/v1")
         self.cfg.setdefault("model_small_id", "google/gemma-3-1b")
         self.cfg.setdefault("model_large_id", "qwen/qwen3-1.7b")
-        self.cfg.setdefault("llm_context_window", "1536")
+        self.cfg.setdefault("llm_context_window", str(DEFAULT_CONTEXT_WINDOW))
         self.cfg.setdefault("ai_low_resource_mode", "true")
         config.save_config(CONFIG_PATH, self.cfg)
 
@@ -3011,6 +3156,7 @@ class KnowledgeApp(tk.Tk):
         self.cfg["device_profile"] = profile
         self.cfg["retrieval_limit"] = str(profile_cfg["retrieval_limit"])
         self.cfg["llm_max_tokens"] = str(profile_cfg["llm_max_tokens"])
+        self.cfg["max_tokens"] = self.cfg["llm_max_tokens"]
         config.save_config(CONFIG_PATH, self.cfg)
         self._refresh_docs(self.docs_repo.get_cached_documents() or [])
 

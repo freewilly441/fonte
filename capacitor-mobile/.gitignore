@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Build artifacts
+dist/
+build/
+*.apk
+*.aab
+*.ipa
+.gradle/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Android
+android/
+.android/
+local.properties
+signing.properties
+
+# iOS
+ios/
+Pods/
+*.xcworkspace/
+*.xcodeproj/
+
+# Capacitor
+.capacitor/
+capacitor.lock.json
+
+# Environment
+.env
+.env.local
+*.pem
+*.key
+
+# Misc
+.cache/
+.tmp/
+*.log

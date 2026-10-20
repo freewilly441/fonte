@@ -8,12 +8,16 @@ STOP_SEQUENCES = [
     "\nAssistant:",
 ]
 
+DEFAULT_N_CTX = 8192
+FALLBACK_N_CTX = 4096
+DEFAULT_MAX_TOKENS = 1024
+
 
 def load_llm(
     *,
     backend: str = "llama_cpp",
     model_path: Path | None = None,
-    n_ctx: int = 1536,
+    n_ctx: int = DEFAULT_N_CTX,
     n_threads: int = 4,
     n_batch: int = 128,
 ):
@@ -29,9 +33,10 @@ def load_llm(
     if not model_path.exists():
         raise FileNotFoundError(f"Model not found: {model_path}")
 
+    safe_n_ctx = max(512, int(n_ctx))
     model = Llama(
         model_path=str(model_path),
-        n_ctx=max(512, int(n_ctx)),
+        n_ctx=safe_n_ctx,
         n_threads=max(1, int(n_threads)),
         n_batch=max(64, int(n_batch)),
         verbose=False,
@@ -46,8 +51,9 @@ def build_prompt(question: str, context: List[Tuple[int, str, str, str]]) -> str
 
     joined = "\n\n".join(context_lines)
     prompt_parts = [
-        "You are a helpful assistant. Answer directly and briefly.",
+        "You are a helpful assistant. Answer directly, clearly, and with enough detail to fully address the question.",
         "Do not repeat the question.",
+        "Finish with a complete final sentence when possible.",
     ]
     if joined:
         prompt_parts.extend(["", "Context:", joined])
@@ -81,16 +87,17 @@ def generate_answer(
     question: str,
     context: List[Tuple[int, str, str, str]],
     *,
-    max_tokens: int = 192,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
     temperature: float = 0.35,
     top_p: float = 0.9,
     top_k: int = 40,
 ) -> str:
     prompt = build_prompt(question, context)
+    safe_max_tokens = max(32, min(4096, int(max_tokens)))
     try:
         out = llm(
             prompt,
-            max_tokens=int(max_tokens),
+            max_tokens=safe_max_tokens,
             temperature=float(temperature),
             top_p=float(top_p),
             top_k=int(top_k),
@@ -102,7 +109,7 @@ def generate_answer(
         # Fallback if the llama-cpp-python API differs
         out = llm.create_completion(
             prompt=prompt,
-            max_tokens=int(max_tokens),
+            max_tokens=safe_max_tokens,
             temperature=float(temperature),
             top_p=float(top_p),
             top_k=int(top_k),

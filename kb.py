@@ -13,8 +13,8 @@ class ChunkResult:
     chunk_text: str
     score: float
 
-CHUNK_SIZE = 800  # characters
-CHUNK_OVERLAP = 120
+CHUNK_SIZE = 1200  # characters
+CHUNK_OVERLAP = 200
 _FTS5_TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 _VECTOR_SETUP_HINT = "Install optional semantic dependencies with: pip install -r requirements-semantic.txt"
 

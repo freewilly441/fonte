@@ -55,9 +55,9 @@ def _coerce_temperature(temperature: float | str | None) -> float:
 
 def _coerce_max_tokens(max_tokens: int | str | None) -> int:
     try:
-        value = int(max_tokens if max_tokens is not None else 192)
+        value = int(max_tokens if max_tokens is not None else 1024)
     except (TypeError, ValueError):
-        value = 192
+        value = 1024
     return max(16, min(4096, value))
 
 
@@ -112,7 +112,7 @@ def chat(
     messages: list[dict[str, str]],
     model: str,
     temperature: float | str = 0.2,
-    max_tokens: int | str = 192,
+    max_tokens: int | str = 1024,
     timeout: int | float | str = 20,
     base_url: str = DEFAULT_BASE_URL,
 ) -> str:
@@ -155,7 +155,7 @@ def chat_json(
     messages: list[dict[str, str]],
     model: str,
     temperature: float | str = 0.2,
-    max_tokens: int | str = 192,
+    max_tokens: int | str = 1024,
     timeout: int | float | str = 20,
     base_url: str = DEFAULT_BASE_URL,
 ) -> dict[str, Any]:

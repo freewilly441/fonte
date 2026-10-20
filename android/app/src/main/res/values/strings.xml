@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Fonte</string>
+    <string name="message_hint">Type your message…</string>
+    <string name="send_button">Send</string>
+    <string name="loading">Loading…</string>
+    <string name="error">Error</string>
+    <string name="initializing_app">Initializing Fonte…</string>
+</resources>

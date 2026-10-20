@@ -86,3 +86,15 @@ pytest_cache/
 # Coverage reports
 .coverage
 htmlcov/
+*.gguf
+*.apk
+*.sqlite
+local.properties
+.claude/
+.venv/
+build/
+node_modules/
+backups/
+__pycache__/
+.gradle/
+.idea/

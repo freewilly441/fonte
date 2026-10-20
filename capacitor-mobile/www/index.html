@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#1e1e1e">
+    <title>Fonte - Local LLM</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+    <div id="app" class="app">
+        <!-- Header -->
+        <header class="header">
+            <h1 class="header-title">Fonte</h1>
+            <button id="menu-btn" class="menu-btn" aria-label="Menu">⋮</button>
+        </header>
+
+        <!-- Connection Status -->
+        <div id="status-bar" class="status-bar" style="display: none;">
+            <span id="status-text">Connecting...</span>
+        </div>
+
+        <!-- Chat Container -->
+        <main class="chat-container">
+            <div id="messages" class="messages"></div>
+        </main>
+
+        <!-- Input Area -->
+        <footer class="input-footer">
+            <form id="chat-form" class="chat-form">
+                <input
+                    id="message-input"
+                    type="text"
+                    class="message-input"
+                    placeholder="Ask Fonte..."
+                    autocomplete="off"
+                    aria-label="Message input"
+                >
+                <button id="send-btn" type="submit" class="send-btn" aria-label="Send">
+                    <span class="send-icon">→</span>
+                </button>
+            </form>
+            <div id="input-hint" class="input-hint">Powered by local LLM</div>
+        </footer>
+
+        <!-- Loading Overlay -->
+        <div id="loading" class="loading-overlay" style="display: none;">
+            <div class="spinner"></div>
+            <p>Processing...</p>
+        </div>
+
+        <!-- Error Dialog -->
+        <div id="error-dialog" class="error-dialog" style="display: none;">
+            <div class="error-content">
+                <h2>Error</h2>
+                <p id="error-text"></p>
+                <button id="error-close-btn" class="error-close">Dismiss</button>
+            </div>
+        </div>
+
+        <!-- Menu -->
+        <div id="menu-overlay" class="menu-overlay" style="display: none;"></div>
+        <menu id="menu" class="menu" style="display: none;">
+            <button id="clear-btn" class="menu-item">Clear Chat</button>
+            <button id="settings-btn" class="menu-item">Settings</button>
+            <button id="about-btn" class="menu-item">About</button>
+        </menu>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

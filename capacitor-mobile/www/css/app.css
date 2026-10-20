@@ -1,0 +1,468 @@
+/* ============================================================================
+   Fonte Mobile - Minimal CSS (Low Overhead)
+   ============================================================================ */
+
+:root {
+    --bg-primary: #1e1e1e;
+    --bg-secondary: #2d2d2d;
+    --bg-tertiary: #3a3a3a;
+    --fg-primary: #ffffff;
+    --fg-secondary: #b0b0b0;
+    --fg-tertiary: #808080;
+    --accent: #6366f1;
+    --accent-hover: #818cf8;
+    --error: #ef4444;
+    --border: #404040;
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    --radius: 0.5rem;
+    --safe-area-top: max(0px, env(safe-area-inset-top));
+    --safe-area-bottom: max(0px, env(safe-area-inset-bottom));
+    --safe-area-left: max(0px, env(safe-area-inset-left));
+    --safe-area-right: max(0px, env(safe-area-inset-right));
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    background: var(--bg-primary);
+    color: var(--fg-primary);
+    overflow: hidden;
+}
+
+/* ============================================================================
+   App Layout (Flexbox)
+   ============================================================================ */
+
+.app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    background: var(--bg-primary);
+    padding-top: var(--safe-area-top);
+    padding-left: var(--safe-area-left);
+    padding-right: var(--safe-area-right);
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-md) var(--spacing-md) var(--spacing-sm);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.header-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.menu-btn {
+    background: transparent;
+    border: none;
+    color: var(--fg-primary);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: var(--spacing-xs);
+    border-radius: var(--radius);
+}
+
+.menu-btn:active {
+    background: var(--bg-tertiary);
+}
+
+/* Status Bar */
+.status-bar {
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.875rem;
+    color: var(--fg-secondary);
+    flex-shrink: 0;
+}
+
+/* ============================================================================
+   Chat Container
+   ============================================================================ */
+
+.chat-container {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding-bottom: var(--spacing-lg);
+}
+
+.messages {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.message {
+    display: flex;
+    margin: 0;
+    animation: slideIn 0.2s ease-out;
+}
+
+.message.user {
+    justify-content: flex-end;
+}
+
+.message.assistant {
+    justify-content: flex-start;
+}
+
+.message-bubble {
+    max-width: 85%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius);
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+
+.message.user .message-bubble {
+    background: var(--accent);
+    color: var(--fg-primary);
+}
+
+.message.assistant .message-bubble {
+    background: var(--bg-secondary);
+    color: var(--fg-primary);
+    border: 1px solid var(--border);
+}
+
+.message-time {
+    font-size: 0.75rem;
+    color: var(--fg-tertiary);
+    margin-top: var(--spacing-xs);
+}
+
+.message.user .message-time {
+    text-align: right;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Empty State */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    color: var(--fg-secondary);
+    text-align: center;
+    padding: var(--spacing-lg);
+}
+
+.empty-state-icon {
+    font-size: 3rem;
+    margin-bottom: var(--spacing-md);
+    opacity: 0.5;
+}
+
+.empty-state-text {
+    font-size: 0.95rem;
+    margin: 0;
+}
+
+/* ============================================================================
+   Input Footer
+   ============================================================================ */
+
+.input-footer {
+    flex-shrink: 0;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    padding: var(--spacing-md);
+    padding-bottom: calc(var(--spacing-md) + var(--safe-area-bottom));
+}
+
+.chat-form {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+}
+
+.message-input {
+    flex: 1;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    color: var(--fg-primary);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius);
+    font-size: 1rem;
+    font-family: inherit;
+}
+
+.message-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+}
+
+.message-input::placeholder {
+    color: var(--fg-tertiary);
+}
+
+.send-btn {
+    background: var(--accent);
+    color: var(--fg-primary);
+    border: none;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--radius);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    font-weight: 600;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.send-btn:active {
+    background: var(--accent-hover);
+}
+
+.send-btn:disabled {
+    background: var(--fg-tertiary);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.input-hint {
+    font-size: 0.75rem;
+    color: var(--fg-tertiary);
+    margin-top: var(--spacing-xs);
+    text-align: center;
+}
+
+/* ============================================================================
+   Loading & Overlays
+   ============================================================================ */
+
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(30, 30, 30, 0.8);
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    gap: var(--spacing-md);
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-overlay p {
+    color: var(--fg-secondary);
+    font-size: 0.95rem;
+}
+
+/* Error Dialog */
+.error-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    z-index: 101;
+    padding: var(--spacing-md);
+}
+
+.error-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: var(--spacing-lg);
+    max-width: 90%;
+    max-height: 80%;
+    overflow-y: auto;
+}
+
+.error-content h2 {
+    color: var(--error);
+    margin: 0 0 var(--spacing-md) 0;
+    font-size: 1.1rem;
+}
+
+.error-content p {
+    color: var(--fg-secondary);
+    margin: 0 0 var(--spacing-lg) 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.error-close {
+    background: var(--accent);
+    color: var(--fg-primary);
+    border: none;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius);
+    cursor: pointer;
+    width: 100%;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.error-close:active {
+    background: var(--accent-hover);
+}
+
+/* ============================================================================
+   Menu
+   ============================================================================ */
+
+.menu-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: transparent;
+    z-index: 50;
+}
+
+.menu {
+    position: fixed;
+    top: 0;
+    right: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 0 0 0 var(--radius);
+    z-index: 51;
+    min-width: 150px;
+    display: flex !important;
+    flex-direction: column;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+    padding-top: var(--safe-area-top);
+}
+
+.menu-item {
+    background: transparent;
+    border: none;
+    color: var(--fg-primary);
+    padding: var(--spacing-md);
+    text-align: left;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.95rem;
+}
+
+.menu-item:last-child {
+    border-bottom: none;
+}
+
+.menu-item:active {
+    background: var(--bg-tertiary);
+}
+
+/* ============================================================================
+   Utilities
+   ============================================================================ */
+
+.hidden {
+    display: none !important;
+}
+
+.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ============================================================================
+   Scrollbar Styling
+   ============================================================================ */
+
+.chat-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.chat-container::-webkit-scrollbar-thumb {
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+}
+
+.chat-container::-webkit-scrollbar-thumb:hover {
+    background: var(--border);
+}
+
+/* ============================================================================
+   Responsive & Accessibility
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+@supports (padding: max(0px)) {
+    body {
+        padding-left: var(--safe-area-left);
+        padding-right: var(--safe-area-right);
+    }
+}

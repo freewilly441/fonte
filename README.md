@@ -219,9 +219,11 @@ $env:FONTE_DEBUG=1; python app.py
 ```
 
 ## License
-Apache-2.0 license
+Fonte is licensed under the Apache License 2.0. See the LICENSE file for the full text and the NOTICE file for attribution.
 
-Add license information here if a `LICENSE` file is added.
+Third-party components, including the bundled TinyLlama model and the word lists, are covered separately in THIRD_PARTY_LICENSES.md.
+
+Contributors are listed in CONTRIBUTORS.md.
 
 ````
 
